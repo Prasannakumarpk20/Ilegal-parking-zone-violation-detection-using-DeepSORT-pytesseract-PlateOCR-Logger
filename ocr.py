@@ -1,32 +1,45 @@
 # ============================================================
 #  ocr.py  —  License Plate OCR using pytesseract
-# ============================================================
-#
-#  Strategy:
-#   1. Crop the bottom 40% of the vehicle bounding box
-#      (that's where plates usually live)
-#   2. Upscale + denoise + threshold the crop
-#   3. Run pytesseract in single-word mode (alphanumeric only)
-#   4. Return cleaned text (≥ 3 chars) or empty string
+#  Tesseract is OPTIONAL — if not installed, OCR is silently
+#  skipped and everything else works normally.
 # ============================================================
 
 import re
+import warnings
 import cv2
 import numpy as np
-import pytesseract
 
-from config import TESSERACT_CMD
+# ── Try to import pytesseract; disable OCR gracefully if missing ──────────────
+_OCR_AVAILABLE = False
 
-
-# Apply custom tesseract path if set in config
-if TESSERACT_CMD:
-    pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+try:
+    import pytesseract
+    from config import TESSERACT_CMD
+    if TESSERACT_CMD:
+        pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+    # Quick smoke-test: will raise if the binary isn't installed
+    pytesseract.get_tesseract_version()
+    _OCR_AVAILABLE = True
+    print("  ✅  Tesseract OCR available — license plate reading enabled.")
+except Exception:
+    warnings.warn(
+        "\n  ⚠   Tesseract / pytesseract not found — OCR disabled.\n"
+        "      Parking violation detection will still work normally;\n"
+        "      plates will just show as blank in the output.\n"
+        "      To enable OCR later:\n"
+        "        conda install -c conda-forge tesseract\n"
+        "        pip install pytesseract",
+        stacklevel=2,
+    )
 
 
 class PlateOCR:
     """
     Attempts to read a license plate from a vehicle bounding box crop.
     Results are cached per track_id to avoid redundant computation.
+
+    If Tesseract is not installed, all methods return empty strings
+    so the rest of the pipeline is completely unaffected.
     """
 
     # Tesseract config: OEM 3 = best available engine, PSM 8 = single word
@@ -37,6 +50,7 @@ class PlateOCR:
 
     def __init__(self):
         self._cache: dict[int, str] = {}   # track_id → best plate text
+        self._enabled = _OCR_AVAILABLE
 
     # ------------------------------------------------------------------ #
     #  Image preprocessing                                                 #
@@ -72,8 +86,12 @@ class PlateOCR:
 
         Returns
         -------
-        Cleaned plate string (e.g. "ABC1234") or "" if nothing found.
+        Cleaned plate string (e.g. "ABC1234") or "" if nothing found / OCR disabled.
         """
+        # ── Bail out early if OCR is unavailable ─────────────────────────
+        if not self._enabled:
+            return ""
+
         # Return cached result if we already have a plate for this vehicle
         if track_id is not None and self._cache.get(track_id):
             return self._cache[track_id]

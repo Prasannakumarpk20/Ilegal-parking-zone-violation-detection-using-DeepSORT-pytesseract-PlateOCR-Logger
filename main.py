@@ -167,16 +167,34 @@ def main() -> None:
     print(f"\n  📹  {video_path}")
     print(f"       {width}×{height}  @  {fps:.1f} fps  —  {total_frames} frames")
 
+    # ── Compute processing scale (target 640px wide for YOLO speed) ───
+    PROC_W = 640
+    proc_scale = min(PROC_W / width, 1.0)          # never upscale
+    proc_w = int(width  * proc_scale)
+    proc_h = int(height * proc_scale)
+    if proc_scale < 1.0:
+        print(f"  ⚡  Processing at {proc_w}×{proc_h}  (scaled for speed)")
+
     # ── Step 1: Draw zone ─────────────────────────────────────────
     ret, first_frame = cap.read()
     if not ret:
         print("❌  Cannot read first frame!")
         sys.exit(1)
 
-    zone_polygon = ZoneDrawer(first_frame).draw()
-    if zone_polygon is None or len(zone_polygon) < 3:
+    # ZoneDrawer may internally downscale the frame for display;
+    # the returned polygon is in *display* coordinates.
+    drawer = ZoneDrawer(first_frame)
+    # Figure out the scale ZoneDrawer applied so we can map back
+    _dh, _dw = first_frame.shape[:2]
+    _zone_scale = min(1280 / _dw, 720 / _dh, 1.0)
+
+    zone_polygon_disp = drawer.draw()
+    if zone_polygon_disp is None or len(zone_polygon_disp) < 3:
         print("❌  No valid zone drawn.  Exiting.")
         sys.exit(1)
+
+    # Map zone polygon from display coords → processing-res coords
+    zone_polygon = (zone_polygon_disp / _zone_scale * proc_scale).astype(np.int32)
 
     # Rewind to start
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -193,7 +211,7 @@ def main() -> None:
     # ── Step 3: Video writer ──────────────────────────────────────
     os.makedirs("violations", exist_ok=True)
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(OUTPUT_PATH, fourcc, fps, (width, height))
+    writer = cv2.VideoWriter(OUTPUT_PATH, fourcc, fps, (proc_w, proc_h))
 
     # ── Step 4: Per-track state ───────────────────────────────────
     zone_entry: dict[int, int]  = {}   # track_id → frame number when entered zone
@@ -202,8 +220,10 @@ def main() -> None:
     print(f"\n  🎬  Processing …  (press Q to stop early)")
     print(f"       Violation threshold: {PARK_DURATION_THRESHOLD}s in zone\n")
 
-    cv2.namedWindow("Parking Violation Detection", cv2.WINDOW_NORMAL)
-    cv2.resizeWindow("Parking Violation Detection", 1280, 720)
+    WIN = "Parking Violation Detection"
+    cv2.namedWindow(WIN, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(WIN, min(proc_w, 1280), min(proc_h, 720))
+    cv2.setWindowProperty(WIN, cv2.WND_PROP_ASPECT_RATIO, cv2.WINDOW_KEEPRATIO)
 
     # ── Main loop ─────────────────────────────────────────────────
     while True:
@@ -212,6 +232,11 @@ def main() -> None:
             break
 
         frame_num += 1
+
+        # Downscale for processing (big speed boost on large videos)
+        if proc_scale < 1.0:
+            frame = cv2.resize(frame, (proc_w, proc_h), interpolation=cv2.INTER_AREA)
+
         display = frame.copy()
 
         # Draw illegal zone
@@ -278,7 +303,7 @@ def main() -> None:
                  len(tracks), len(ids_in_zone), vlogger.total)
 
         writer.write(display)
-        cv2.imshow("Parking Violation Detection", display)
+        cv2.imshow(WIN, display)
 
         if cv2.waitKey(1) & 0xFF == ord("q"):
             print("\n  ⏹  User stopped early.")

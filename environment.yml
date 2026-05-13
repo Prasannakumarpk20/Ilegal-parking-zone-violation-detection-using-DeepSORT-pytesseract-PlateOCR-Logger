@@ -4,13 +4,19 @@ channels:
   - defaults
 dependencies:
   - python=3.10
-  - tesseract          # OCR engine (conda-forge)
   - pip
   - pip:
     - ultralytics>=8.0.0          # YOLOv8 detection
     - deep-sort-realtime>=1.3.2   # DeepSORT tracking
-    - pytesseract>=0.3.10         # Tesseract Python wrapper
+    - pytesseract>=0.3.10         # Tesseract Python wrapper (optional — OCR)
     - opencv-python>=4.8.0        # Video I/O + drawing
     - numpy>=1.24.0
     - pandas>=2.0.0
     - Pillow>=10.0.0
+    - yt-dlp                      # For downloading sample videos
+
+# NOTE: Tesseract OCR binary is OPTIONAL.
+# The system detects parking violations fully without it.
+# To enable license plate reading later:
+#   Windows : https://github.com/UB-Mannheim/tesseract/wiki
+#   conda   : conda install -c conda-forge tesseract
