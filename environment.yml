@@ -1,0 +1,16 @@
+name: parking-violation
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.10
+  - tesseract          # OCR engine (conda-forge)
+  - pip
+  - pip:
+    - ultralytics>=8.0.0          # YOLOv8 detection
+    - deep-sort-realtime>=1.3.2   # DeepSORT tracking
+    - pytesseract>=0.3.10         # Tesseract Python wrapper
+    - opencv-python>=4.8.0        # Video I/O + drawing
+    - numpy>=1.24.0
+    - pandas>=2.0.0
+    - Pillow>=10.0.0

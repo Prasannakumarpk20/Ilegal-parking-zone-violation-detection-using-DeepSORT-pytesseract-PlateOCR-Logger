@@ -1,2 +1,33 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# YOLO model weights (large binary files — download automatically)
+*.pt
+*.onnx
+
+# Input/output videos
+*.mp4
+*.avi
+*.mov
+
+# Violations output folder
+violations/
+
+# Conda / pip envs
+.env
+.venv/
+env/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# SSH keys (these should NEVER be committed)
 test.txt
 test.txt.pub
+
+# IDE
+.vscode/
+.idea/
